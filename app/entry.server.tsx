@@ -6,7 +6,7 @@ import * as Sentry from "@sentry/remix";
  */
 
 import { PassThrough } from "node:stream";
-
+import builder from "content-security-policy-builder";
 import type { AppLoadContext, EntryContext } from "@remix-run/node";
 import { createReadableStreamFromReadable } from "@remix-run/node";
 import { RemixServer } from "@remix-run/react";
@@ -18,6 +18,8 @@ export const handleError = Sentry.wrapHandleErrorWithSentry(
     console.error({ error, request });
   },
 );
+
+import { NonceContext } from "./nonce-context";
 
 const ABORT_DELAY = 5_000;
 
@@ -31,19 +33,34 @@ export default function handleRequest(
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   loadContext: AppLoadContext,
 ) {
+  const nonce = crypto.randomUUID().replace(/-/g, "");
+
   return isbot(request.headers.get("user-agent") || "")
     ? handleBotRequest(
-        request,
-        responseStatusCode,
-        responseHeaders,
-        remixContext,
-      )
+      request,
+      responseStatusCode,
+      responseHeaders,
+      remixContext,
+      nonce
+    )
     : handleBrowserRequest(
-        request,
-        responseStatusCode,
-        responseHeaders,
-        remixContext,
-      );
+      request,
+      responseStatusCode,
+      responseHeaders,
+      remixContext,
+      nonce
+    );
+}
+
+function getContentSecurityPolicy(nonce: string) {
+  return builder({
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'"],
+      connectSrc: ["'self'", "https://o4508948532559872.ingest.us.sentry.io"],
+      styleSrc: ["'self'", `'nonce-${nonce}'`]
+    },
+  });
 }
 
 function handleBotRequest(
@@ -51,15 +68,18 @@ function handleBotRequest(
   responseStatusCode: number,
   responseHeaders: Headers,
   remixContext: EntryContext,
+  nonce: string
 ) {
   return new Promise((resolve, reject) => {
     let shellRendered = false;
     const { pipe, abort } = renderToPipeableStream(
-      <RemixServer
-        context={remixContext}
-        url={request.url}
-        abortDelay={ABORT_DELAY}
-      />,
+      <NonceContext.Provider value={nonce}>
+        <RemixServer
+          context={remixContext}
+          url={request.url}
+          abortDelay={ABORT_DELAY}
+        />
+      </NonceContext.Provider>,
       {
         onAllReady() {
           shellRendered = true;
@@ -67,6 +87,10 @@ function handleBotRequest(
           const stream = createReadableStreamFromReadable(body);
 
           responseHeaders.set("Content-Type", "text/html");
+          responseHeaders.set(
+            "Content-Security-Policy",
+            getContentSecurityPolicy(nonce)
+          );
 
           resolve(
             new Response(stream, {
@@ -101,15 +125,18 @@ function handleBrowserRequest(
   responseStatusCode: number,
   responseHeaders: Headers,
   remixContext: EntryContext,
+  nonce: string
 ) {
   return new Promise((resolve, reject) => {
     let shellRendered = false;
     const { pipe, abort } = renderToPipeableStream(
-      <RemixServer
-        context={remixContext}
-        url={request.url}
-        abortDelay={ABORT_DELAY}
-      />,
+      <NonceContext.Provider value={nonce}>
+        <RemixServer
+          context={remixContext}
+          url={request.url}
+          abortDelay={ABORT_DELAY}
+        />
+      </NonceContext.Provider>,
       {
         onShellReady() {
           shellRendered = true;
@@ -117,6 +144,10 @@ function handleBrowserRequest(
           const stream = createReadableStreamFromReadable(body);
 
           responseHeaders.set("Content-Type", "text/html");
+          responseHeaders.set(
+            "Content-Security-Policy",
+            getContentSecurityPolicy(nonce)
+          );
 
           resolve(
             new Response(stream, {

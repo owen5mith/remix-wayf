@@ -1,4 +1,6 @@
 import { captureRemixErrorBoundaryError } from "@sentry/remix";
+import { useContext } from "react";
+import { NonceContext } from "./nonce-context";
 import { Separator } from "@/components/ui/separator";
 import { cssBundleHref } from "@remix-run/css-bundle";
 import type { LinksFunction, LoaderFunctionArgs } from "@remix-run/node";
@@ -58,6 +60,7 @@ export default function AppWithProviders() {
 function App() {
   const data = useLoaderData<typeof loader>();
   const [theme] = useTheme();
+  const nonce = useContext(NonceContext);
 
   return (
     <html lang="en" className={clsx(theme)}>
@@ -65,7 +68,7 @@ function App() {
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <Meta />
-        <PreventFlashOnWrongTheme ssrTheme={Boolean(data.theme)} />
+        <PreventFlashOnWrongTheme ssrTheme={Boolean(data.theme)} nonce={nonce} />
         <Links />
       </head>
       <body>
@@ -94,9 +97,9 @@ function App() {
             </div>
           </div>
         </main>
-        <ScrollRestoration />
-        <Scripts />
-        <LiveReload />
+        <ScrollRestoration nonce={nonce} />
+        <Scripts nonce={nonce} />
+        <LiveReload nonce={nonce} />
         <Analytics />
         <SpeedInsights />
       </body>

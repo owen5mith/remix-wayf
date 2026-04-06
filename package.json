@@ -27,6 +27,7 @@
     "@vercel/speed-insights": "^1.0.8",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.0",
+    "content-security-policy-builder": "^2.3.0",
     "date-fns": "^3.3.1",
     "dotenv": "^16.4.7",
     "drizzle-orm": "^0.40.0",
